@@ -5,23 +5,16 @@ import time
 import argparse
 import psycopg2 as pg
 import os
-import row_processor as Processor
 import six
 import json
 import string
 import random
 from multiprocessing import Process
 
-# Special rules needed for certain tables (esp. for old database dumps)
-specialRules = {("Posts", "ViewCount"): "NULLIF(%(ViewCount)s, '')::int"}
-
-# part of the file already downloaded
-file_part = None
-
 NUMPROCS=25
 NUMBATCHES=100
 NUMROWS=1
-DATASIZE = 16000000
+DATASIZE = 16 * 1024 * 1024 # Default to 16Mb value size.
 
 def getConnectionParameters():
     """Get the parameters for the connection to the database."""
@@ -79,7 +72,6 @@ def handleTable(table, batches, records, recordsize):
         six.print_("Warning from the database.", file=sys.stderr)
         six.print_("pg.Warning: {0}".format(str(w)), file=sys.stderr)
 
-
 def dispatchTableHandlers(table, procs, batches, records, recordsize):
     proclist = []
     for i in range(int(procs)):
@@ -99,26 +91,70 @@ parser.add_argument(
     "-d",
     "--dbname",
     help="Name of database to create the table in. The database must exist.",
-    default="stackoverflow",
+    required=True
 )
-
-parser.add_argument("-u", "--username", help="Username for the database.", default=None)
-
-parser.add_argument("-p", "--password", help="Password for the database.", default=None)
 
 parser.add_argument(
-    "-P", "--port", help="Port to connect with the database on.", default=None
+    "-t",
+    "--table",
+    help="Name of the table to load data into. The table must exist.",
+    required=True
 )
 
-parser.add_argument("-H", "--host", help="Hostname for the database.", default=None)
+parser.add_argument(
+    "-u", 
+    "--username", 
+    help="Username for the database.", 
+    required=True)
 
-parser.add_argument("-n", "--procs", help="Number of processes to parallelize insert", default=NUMPROCS)
+parser.add_argument(
+    "-p", 
+    "--password", 
+    help="Password for the database.", 
+    required=True
+)
 
-parser.add_argument("-b", "--batches", help="Number of insert batches", default=NUMBATCHES)
+parser.add_argument(
+    "-P", 
+    "--port", 
+    help="Port to connect with the database on.", 
+    default=5432
+)
 
-parser.add_argument("-r", "--rows", help="Number of rows per batch", default=NUMROWS)
+parser.add_argument(
+    "-H", 
+    "--host", 
+    help="Hostname for the database.", 
+    required=True
+)
 
-parser.add_argument("-D", "--datasize", help="Size (in bytes) of each column value", default=DATASIZE)
+parser.add_argument(
+    "-n", 
+    "--procs", 
+    help="Number of processes to parallelize insert", 
+    default=NUMPROCS
+)
+
+parser.add_argument(
+    "-b", 
+    "--batches", 
+    help="Number of insert batches", 
+    default=NUMBATCHES
+)
+
+parser.add_argument(
+    "-r", 
+    "--rows", 
+    help="Number of rows per batch", 
+    default=NUMROWS
+)
+
+parser.add_argument(
+    "-D", 
+    "--datasize", 
+    help="Size (in bytes) of each column value", 
+    default=DATASIZE
+)
 
 args = parser.parse_args()
 
@@ -128,5 +164,5 @@ try:
 except NameError:
     pass
 
-table = "random_large_strings_external_uncompressed"
+table = args.table
 dispatchTableHandlers(table, args.procs, args.batches, args.rows, args.datasize)
